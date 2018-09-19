@@ -1,0 +1,78 @@
+---
+- copy:
+    src: /source
+    dest: /
+    owner: ec2-user
+    group: ec2-user 
+    mode: 0777
+
+- name: Checking system compatibility, please wait...
+  when: ansible_distribution != "RedHat"
+  fail: msg="THIS IS NOT A SUPPORTED OS, PLEASE ENSURE YOU RUN THIS ON A REDHAT SYSTEM"
+
+- name: Checking RedHat version
+  when: ansible_distribution_major_version != "7"
+  fail: msg="THIS IS NOT A SUPPORTED REDHAT VERSION. PLEASE ENSURE YOUR USING A RHEL 7 PRODUCT"
+
+### Not needed in production, software not installed via Yum ### 
+###- name: Installing Java for dependancy 
+###  yum: name=java-1.8.0-openjdk state=present
+
+- name: Creating the EAP installation directory
+  file: path=/opt/redhat/jboss/jboss-as-domain mode=0755 state=directory
+
+- name: Copying the JBoss-EAP tarball into /tmp before we extract
+  copy: src=/source/jboss-eap-7.1.0.zip dest={{ tmp_eap }}
+  mode: 0777
+  register: copyToTempStatus
+- debug: var=copyToTempStatus
+  
+###- name: Copying the Data Grid modules for EAP into /tmp before we extract
+###  copy: src=jboss-jdg-modules.tar.bz2 dest={{ tmp_jdgmodules }}
+
+- name: Extracting the archive into the top level JBoss EAP directory
+  when: copyToTempStatus|success
+  unarchive: src=/source/jboss-eap-7.1.0.zip dest={{ extracted_dir }}
+
+###- name: Extracting the Data Grid modules archive into the top level JDG directory
+###  unarchive: src={{ tmp_jdgmodules }} dest={{ extracted_dir }}
+
+###- name: Copy the JDG Modules to the JBoss EAP modules directory
+###  copy: src={{ jdg_modules }} dest={{ eap_jdgmodules }} 
+
+- name: Creating JBoss directory structure
+  file: path=/etc/jboss-as state=directory mode=0755
+
+- name: Add JBoss group
+  group: name=jboss-as
+
+- name: Add JBoss user and place into the JBoss group
+  user: name=jboss-as group=jboss-as home={{ eap_directory }}
+
+- name: Adding the JBoss startup file
+  template: src=jboss-as.conf dest=/etc/default/jboss-as.conf
+
+- name: Fixing JBoss permissions
+  file: path=/etc/default/jboss-as.conf owner=jboss-as mode=0755
+
+###- name: Change ownership of JDG modules directory
+###  file: path={{ jdg_directory }} owner=jboss-as group=jboss-as recurse=yes 
+
+- name: Change ownership of JBoss EAP directory
+  file: path=/opt/redhat/jboss/jboss-as-domain/jboss-eap-7.1 owner=jboss-as group=jboss-as recurse=yes
+
+- name: Copying in the JBoss domain configuration files
+  template: src=domain_master.xml dest=/opt/redhat/jboss/jboss-as-domain/jboss-eap-7.1/domain/configuration/domain.xml
+
+- name: Still copying the JBoss configuration files
+  template: src=host_master.xml dest=/opt/redhat/jboss/jboss-as-domain/jboss-eap-7.1/domain/configuration/host.xml
+
+- name: Dropping in JBoss init script. Due to Ansible limitations thus far, this is to be run as a service
+  template: src=jboss-as-domain.sh dest=/etc/init.d/jboss-as-domain
+
+- name: Setting JBoss EAP permissions
+  file: path=/etc/init.d/jboss-as-domain owner=jboss-as mode=0755
+  notify: Start JBoss
+
+- meta: flush_handlers
+

@@ -1,0 +1,5 @@
+- hosts: "{{ JB_HOST }}" 
+  remote_user: ec2-user
+  sudo: yes
+  roles:
+     - jboss-eap-domain
