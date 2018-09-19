@@ -1,0 +1,14 @@
+---
+- hosts: "{{ JB_HOST }}"
+  remote_user: ec2-user
+  sudo: yes
+
+  tasks: 
+  - name: install the latest version of ZIP
+    yum:
+      name: zip
+      state: latest
+  - name: install the latest version of UNZIP
+    yum:
+      name: unzip
+      state: latest
